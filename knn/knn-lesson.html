@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K-Nearest Neighbors — Deep Dive</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0b0f1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1f2d45;
+    --accent: #38bdf8;
+    --accent2: #a78bfa;
+    --accent3: #34d399;
+    --warn: #fb923c;
+    --danger: #f87171;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  /* ── Nav ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(11,15,26,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; gap: 0; height: 56px;
+  }
+  .nav-logo { font-weight: 700; font-size: 1rem; color: var(--accent); margin-right: 2rem; white-space: nowrap; }
+  .nav-links { display: flex; gap: 0; overflow-x: auto; }
+  .nav-links a {
+    color: var(--muted); text-decoration: none; font-size: 0.8rem;
+    font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 0 1rem; height: 56px; display: flex; align-items: center;
+    border-bottom: 2px solid transparent; white-space: nowrap;
+    transition: color .2s, border-color .2s;
+  }
+  .nav-links a:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ── Layout ── */
+  .container { max-width: 860px; margin: 0 auto; padding: 4rem 2rem 8rem; }
+
+  /* ── Section heads ── */
+  .section-label {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 0.6rem;
+  }
+  h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 700; line-height: 1.15; margin-bottom: 1rem; }
+  h2 { font-size: 1.5rem; font-weight: 600; margin: 3.5rem 0 1rem; color: #f1f5f9; }
+  h3 { font-size: 1.1rem; font-weight: 600; margin: 2rem 0 0.5rem; color: var(--accent2); }
+  p { color: #cbd5e1; margin-bottom: 1rem; }
+
+  .hero { padding: 3rem 0 2rem; border-bottom: 1px solid var(--border); margin-bottom: 4rem; }
+  .hero-sub { font-size: 1.1rem; color: var(--muted); max-width: 600px; margin-top: 1rem; }
+
+  .tag { display: inline-block; background: rgba(56,189,248,0.1); color: var(--accent);
+         font-family: var(--mono); font-size: 0.72rem; padding: 2px 10px; border-radius: 4px;
+         border: 1px solid rgba(56,189,248,0.25); margin-right: 6px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem 2rem; margin: 1.5rem 0;
+  }
+  .card.accent-left { border-left: 3px solid var(--accent); }
+  .card.purple-left { border-left: 3px solid var(--accent2); }
+  .card.green-left  { border-left: 3px solid var(--accent3); }
+  .card.warn-left   { border-left: 3px solid var(--warn); }
+
+  /* ── Math blocks ── */
+  .math-block {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.2rem 1.5rem; margin: 1.2rem 0;
+    font-family: var(--mono); font-size: 0.95rem; overflow-x: auto;
+    color: #f8fafc; line-height: 1.9;
+  }
+  .math-block .comment { color: var(--muted); }
+  .math-block .highlight { color: var(--accent); font-weight: 600; }
+  .math-block .purple { color: var(--accent2); }
+  .math-block .green  { color: var(--accent3); }
+  .math-block .orange { color: var(--warn); }
+
+  /* ── Code blocks ── */
+  .code-block {
+    background: #080d16; border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.2rem 1.5rem; margin: 1.2rem 0;
+    font-family: var(--mono); font-size: 0.82rem; overflow-x: auto;
+    line-height: 1.8; color: #e2e8f0;
+  }
+  .kw { color: #c084fc; }
+  .fn { color: #38bdf8; }
+  .str { color: #34d399; }
+  .cm { color: var(--muted); font-style: italic; }
+  .num { color: var(--warn); }
+
+  /* ── Callouts ── */
+  .callout {
+    display: flex; gap: 1rem; align-items: flex-start;
+    background: var(--surface2); border-radius: 8px;
+    padding: 1rem 1.2rem; margin: 1.2rem 0; border: 1px solid var(--border);
+  }
+  .callout-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 2px; }
+  .callout-body { font-size: 0.92rem; color: #94a3b8; }
+  .callout-body strong { color: var(--text); }
+
+  /* ── KNN Interactive canvas ── */
+  #knn-canvas-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; margin: 2rem 0;
+  }
+  .canvas-controls { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; align-items: center; }
+  .btn {
+    font-family: var(--sans); font-size: 0.82rem; font-weight: 600;
+    padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: var(--accent); color: #0b0f1a; }
+  .btn-purple  { background: var(--accent2); color: #0b0f1a; }
+  .btn-ghost   { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-danger  { background: #1f1030; color: var(--danger); border: 1px solid #4c1d1d; }
+
+  label { font-size: 0.82rem; color: var(--muted); margin-right: 4px; }
+  input[type=range] { accent-color: var(--accent); width: 90px; }
+  select {
+    background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+    padding: 6px 10px; border-radius: 6px; font-family: var(--sans); font-size: 0.82rem;
+  }
+
+  canvas {
+    width: 100%; border-radius: 8px; display: block;
+    cursor: crosshair; border: 1px solid var(--border);
+  }
+  .canvas-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
+  #knn-result {
+    margin-top: 0.8rem; font-family: var(--mono); font-size: 0.85rem;
+    color: var(--accent3); min-height: 1.4em;
+  }
+
+  /* ── Distance table ── */
+  .dist-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  .dist-table th { color: var(--muted); font-weight: 500; padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+  .dist-table td { padding: 8px 12px; border-bottom: 1px solid rgba(31,45,69,0.5); font-family: var(--mono); }
+  .dist-table tr.winner td { color: var(--accent3); }
+
+  /* ── Comparison grid ── */
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin: 1.5rem 0; }
+  .compare-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; }
+  .compare-card h4 { font-size: 0.85rem; font-weight: 600; color: var(--accent); margin-bottom: 0.6rem; }
+  .compare-card p { font-size: 0.8rem; color: var(--muted); margin: 0; }
+
+  /* ── Pros/Cons ── */
+  .pro-con { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0; }
+  .pro-con-box { background: var(--surface2); border-radius: 8px; padding: 1.2rem; }
+  .pro-con-box.pro { border-top: 2px solid var(--accent3); }
+  .pro-con-box.con { border-top: 2px solid var(--danger); }
+  .pro-con-box h4 { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.6rem; }
+  .pro-con-box.pro h4 { color: var(--accent3); }
+  .pro-con-box.con h4 { color: var(--danger); }
+  .pro-con-box li { font-size: 0.82rem; color: var(--muted); margin-left: 1rem; margin-bottom: 0.4rem; }
+
+  /* ── K selector vis ── */
+  #k-vis { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
+  .k-demo { text-align: center; }
+  .k-demo canvas { border-radius: 6px; }
+  .k-demo p { font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; }
+
+  /* ── Progress bar ── */
+  .progress-bar {
+    position: fixed; top: 0; left: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    z-index: 200; transition: width .1s;
+  }
+
+  @media (max-width: 600px) {
+    .compare-grid { grid-template-columns: 1fr; }
+    .pro-con { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<nav>
+  <span class="nav-logo">KNN Deep Dive</span>
+  <div class="nav-links">
+    <a href="#intuition">Intuition</a>
+    <a href="#math">Math</a>
+    <a href="#distances">Distances</a>
+    <a href="#playground">Playground</a>
+    <a href="#k-choice">K Choice</a>
+    <a href="#regression">Regression</a>
+    <a href="#complexity">Complexity</a>
+    <a href="#tips">Tips</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="section-label">Module 03 — After Linear & Logistic Regression</div>
+    <h1>K-Nearest<br>Neighbors</h1>
+    <p class="hero-sub">A non-parametric, lazy learning algorithm that makes predictions by finding the K closest training examples to a query point — no learning, pure memory.</p>
+    <div style="margin-top:1.2rem">
+      <span class="tag">Classification</span>
+      <span class="tag">Regression</span>
+      <span class="tag">Non-Parametric</span>
+      <span class="tag">Lazy Learner</span>
+    </div>
+  </div>
+
+  <!-- SECTION 1: INTUITION -->
+  <section id="intuition">
+    <div class="section-label">Section 01</div>
+    <h2>The Core Intuition</h2>
+    <p>You just moved to a new city and want to know if a neighborhood is safe. What do you do? You ask your <strong>nearest neighbors</strong> — people who live closest to you. You don't build a model; you just look around and take a vote.</p>
+    <p>That is exactly what KNN does. For every new data point, it:</p>
+
+    <div class="card accent-left">
+      <strong style="color:var(--accent)">The KNN Algorithm (Classification)</strong>
+      <ol style="margin-top:0.8rem; color:#94a3b8; padding-left:1.2rem; font-size:0.92rem;">
+        <li style="margin-bottom:0.5rem">Calculate the <strong style="color:var(--text)">distance</strong> from the query point to every training point.</li>
+        <li style="margin-bottom:0.5rem">Sort training points by distance → pick the <strong style="color:var(--accent)">K closest</strong> ones.</li>
+        <li style="margin-bottom:0.5rem">Take a <strong style="color:var(--text)">majority vote</strong> of their labels.</li>
+        <li>Assign that label to the query point.</li>
+      </ol>
+    </div>
+
+    <div class="callout">
+      <span class="callout-icon">💡</span>
+      <div class="callout-body">
+        <strong>Why "Lazy Learner"?</strong> Linear/Logistic regression <em>learn</em> weights during training. KNN does zero computation at training time — it just memorizes all data. All the work happens at prediction time. This is called <em>instance-based</em> or <em>lazy</em> learning.
+      </div>
+    </div>
+
+    <div class="callout">
+      <span class="callout-icon">📐</span>
+      <div class="callout-body">
+        <strong>Why "Non-Parametric"?</strong> Linear Regression has parameters (w₀, w₁ … wₙ). Logistic Regression too. KNN has <em>no parameters to learn</em> — it doesn't compress the data into a formula. The number K is a <em>hyperparameter</em>, not a learned parameter.
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: MATH -->
+  <section id="math">
+    <div class="section-label">Section 02</div>
+    <h2>Mathematical Foundation</h2>
+
+    <h3>Formal Definition</h3>
+    <p>Given a training set <strong>D = {(x⁽¹⁾, y⁽¹⁾), …, (x⁽ⁿ⁾, y⁽ⁿ⁾)}</strong> and a query point <strong>x</strong>:</p>
+
+    <div class="math-block">
+<span class="comment">-- Step 1: Compute distances from query x to all training points --</span>
+
+d(x, x⁽ⁱ⁾) = distance_function(x, x⁽ⁱ⁾)   <span class="comment">for i = 1 to n</span>
+
+<span class="comment">-- Step 2: Find the K Nearest Neighbors --</span>
+
+<span class="highlight">N_K(x)</span> = { K training points with smallest d(x, x⁽ⁱ⁾) }
+
+<span class="comment">-- Step 3 (Classification): Majority Vote --</span>
+
+<span class="purple">ŷ = argmax_c  Σ  𝟙[y⁽ⁱ⁾ = c]</span>
+               <span class="comment">x⁽ⁱ⁾ ∈ N_K(x)</span>
+
+<span class="comment">-- 𝟙[condition] = 1 if condition is true, 0 otherwise --</span>
+<span class="comment">-- argmax_c = class c that gets the most votes --</span>
+    </div>
+
+    <div class="callout">
+      <span class="callout-icon">🔢</span>
+      <div class="callout-body">
+        <strong>Reading the formula:</strong> We look at all K neighbors. For each possible class c, we count how many of those K neighbors belong to class c. We predict whichever class c gets the highest count. Simple democracy.
+      </div>
+    </div>
+
+    <h3>Decision Boundary</h3>
+    <p>Unlike logistic regression that draws a single smooth line, KNN creates a <strong>Voronoi-like decision boundary</strong> — a complex, non-linear boundary that adapts to the local structure of your data.</p>
+
+    <div class="card purple-left">
+      <strong style="color:var(--accent2)">K=1 Decision Rule</strong>
+      <div class="math-block" style="margin-top:0.8rem">
+<span class="comment">When K=1, prediction is simply:</span>
+
+<span class="purple">ŷ = y⁽ⁱ*⁾</span>   <span class="comment">where  i* = argmin_i  d(x, x⁽ⁱ⁾)</span>
+
+<span class="comment">→ Assign the label of the single closest neighbor</span>
+<span class="comment">→ Creates the most complex, jagged boundary</span>
+<span class="comment">→ Zero training error (overfitting!)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: DISTANCES -->
+  <section id="distances">
+    <div class="section-label">Section 03</div>
+    <h2>Distance Metrics — The Heart of KNN</h2>
+    <p>The entire algorithm depends on your definition of "nearest." Different distance metrics reveal different structures in your data.</p>
+
+    <h3>1. Euclidean Distance (L2 Norm)</h3>
+    <p>Straight-line distance. Most common default choice.</p>
+    <div class="math-block">
+<span class="highlight">d_Euclidean(x, z)</span> = √( Σᵢ (xᵢ - zᵢ)² )
+
+<span class="comment">For 2D:  d = √( (x₁-z₁)² + (x₂-z₂)² )</span>
+
+<span class="comment">Example: x = [3, 4],  z = [0, 0]</span>
+d = √(3² + 4²) = √(9+16) = <span class="green">√25 = 5</span>
+    </div>
+
+    <h3>2. Manhattan Distance (L1 Norm)</h3>
+    <p>Sum of absolute differences. Imagine walking on a grid — you can only go N/S/E/W, not diagonally.</p>
+    <div class="math-block">
+<span class="highlight">d_Manhattan(x, z)</span> = Σᵢ |xᵢ - zᵢ|
+
+<span class="comment">For 2D:  d = |x₁-z₁| + |x₂-z₂|</span>
+
+<span class="comment">Example: x = [3, 4],  z = [0, 0]</span>
+d = |3-0| + |4-0| = 3 + 4 = <span class="green">7</span>
+    </div>
+
+    <h3>3. Minkowski Distance (Generalization)</h3>
+    <p>Euclidean and Manhattan are special cases of this general form:</p>
+    <div class="math-block">
+<span class="highlight">d_Minkowski(x, z, p)</span> = ( Σᵢ |xᵢ - zᵢ|ᵖ )^(1/p)
+
+<span class="comment">p = 1  →  Manhattan Distance</span>
+<span class="comment">p = 2  →  Euclidean Distance</span>
+<span class="comment">p → ∞  →  Chebyshev Distance (max of absolute diffs)</span>
+    </div>
+
+    <h3>4. Cosine Similarity (for text/embeddings)</h3>
+    <p>Measures the angle between two vectors, not their magnitude. Used when you care about direction, not length (text documents, word embeddings).</p>
+    <div class="math-block">
+<span class="highlight">cos_sim(x, z)</span> = (x · z) / (‖x‖ · ‖z‖)
+
+<span class="comment">= Σᵢ(xᵢzᵢ)  /  √(Σxᵢ²) · √(Σzᵢ²)</span>
+
+<span class="comment">Range: [-1, 1]   →   Cosine Distance = 1 - cos_sim</span>
+    </div>
+
+    <h3>5. Hamming Distance (for categorical)</h3>
+    <div class="math-block">
+<span class="highlight">d_Hamming</span> = (number of positions where the two strings differ) / total_length
+
+<span class="comment">Example:  "karrot" vs "carrot"</span>
+<span class="comment">→  Position 0: k≠c (different)</span>
+<span class="comment">→  Positions 1-5: same</span>
+d = 1/6 = <span class="green">0.167</span>
+    </div>
+
+    <div class="card warn-left">
+      <strong style="color:var(--warn)">⚠️ Feature Scaling is CRITICAL for KNN</strong>
+      <p style="margin-top:0.6rem; color:#94a3b8; font-size:0.88rem;">
+        Imagine features: Age (0–80), Salary (0–200,000). Euclidean distance will be dominated by Salary. A difference of $1000 vs a 10-year age difference — salary wins every time. <strong style="color:var(--text)">Always StandardScale or MinMaxScale before KNN.</strong>
+      </p>
+      <div class="math-block" style="margin-top:0.8rem">
+<span class="comment">StandardScaler (Z-score normalization):</span>
+<span class="orange">x_scaled = (x - μ) / σ</span>
+
+<span class="comment">MinMaxScaler:</span>
+<span class="orange">x_scaled = (x - x_min) / (x_max - x_min)   → maps to [0, 1]</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4: PLAYGROUND -->
+  <section id="playground">
+    <div class="section-label">Section 04</div>
+    <h2>Interactive Playground</h2>
+    <p>Click anywhere on the canvas to add points. Then drop a query point to see KNN classify it in real time.</p>
+
+    <div id="knn-canvas-wrap">
+      <div class="canvas-controls">
+        <button class="btn btn-primary" onclick="setMode('classA')">+ Class A (Blue)</button>
+        <button class="btn btn-purple" onclick="setMode('classB')">+ Class B (Purple)</button>
+        <button class="btn btn-ghost" onclick="setMode('query')">🎯 Query Point</button>
+        <button class="btn btn-danger" onclick="clearCanvas()">Clear</button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label>K =</label>
+          <input type="range" id="k-slider" min="1" max="11" step="2" value="3" oninput="updateK(this.value)">
+          <span id="k-display" style="font-family:var(--mono);color:var(--accent);font-size:0.85rem">3</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label>Distance:</label>
+          <select id="dist-select" onchange="classify()">
+            <option value="euclidean">Euclidean (L2)</option>
+            <option value="manhattan">Manhattan (L1)</option>
+          </select>
+        </div>
+      </div>
+      <canvas id="knn-canvas" height="400"></canvas>
+      <div class="canvas-hint">Mode: <span id="mode-label" style="color:var(--accent)">Class A</span> — Click canvas to place points. Switch to Query Point mode to classify.</div>
+      <div id="knn-result"></div>
+
+      <div id="dist-table-wrap" style="margin-top:1.2rem; display:none">
+        <strong style="font-size:0.85rem;color:var(--muted)">Nearest Neighbors (sorted by distance):</strong>
+        <table class="dist-table" id="dist-table">
+          <thead><tr><th>#</th><th>Class</th><th>Distance</th><th>In K?</th></tr></thead>
+          <tbody id="dist-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: K CHOICE -->
+  <section id="k-choice">
+    <div class="section-label">Section 05</div>
+    <h2>Choosing K — Bias vs Variance Trade-off</h2>
+
+    <div class="card accent-left">
+      <div class="math-block">
+<span class="comment">Small K (e.g. K=1):</span>
+<span class="highlight">High Variance, Low Bias</span>
+→ Captures every local fluctuation → Overfits
+→ Decision boundary is very jagged
+→ Training error = 0 (always picks itself)
+
+<span class="comment">Large K (e.g. K=N):</span>
+<span class="orange">Low Variance, High Bias</span>
+→ Predicts the majority class for everything → Underfits
+→ Decision boundary becomes nearly linear
+→ Ignores all local structure
+
+<span class="green">Optimal K:</span>
+→ Found by cross-validation (usually odd K to avoid ties)
+→ Typical starting point: K = √N
+    </div>
+    </div>
+
+    <h3>The Error Curve</h3>
+    <div class="math-block">
+<span class="comment">As K increases from 1 → N:</span>
+
+Training Error:   ↗ increases (less memorization)
+Test Error:       ↘ decreases first (reducing overfitting)
+                  ↗ then increases (underfitting kicks in)
+
+<span class="green">Sweet spot: where test error is minimum</span>
+<span class="comment">→ Use k-fold cross-validation to find it</span>
+    </div>
+
+    <div class="callout">
+      <span class="callout-icon">🎯</span>
+      <div class="callout-body">
+        <strong>Rule of thumb:</strong> Start with K = √n where n is number of training samples. Use odd K for binary classification to avoid ties. Always validate with cross-validation.
+      </div>
+    </div>
+
+    <h3>Weighted KNN — Smarter Voting</h3>
+    <p>Instead of equal votes, closer neighbors get more weight:</p>
+    <div class="math-block">
+<span class="comment">Standard KNN:  each neighbor votes with weight = 1</span>
+
+<span class="comment">Weighted KNN:  neighbor i votes with weight:</span>
+<span class="highlight">w⁽ⁱ⁾ = 1 / d(x, x⁽ⁱ⁾)²</span>   <span class="comment">← inverse square distance</span>
+
+<span class="comment">Prediction:  ŷ = argmax_c  Σ  w⁽ⁱ⁾ · 𝟙[y⁽ⁱ⁾ = c]</span>
+                           <span class="comment">x⁽ⁱ⁾ ∈ N_K(x)</span>
+
+<span class="comment">→ Avoids tie-breaking issues</span>
+<span class="comment">→ More robust to noisy neighbors at the boundary</span>
+    </div>
+  </section>
+
+  <!-- SECTION 6: REGRESSION -->
+  <section id="regression">
+    <div class="section-label">Section 06</div>
+    <h2>KNN for Regression</h2>
+    <p>Instead of voting, we average the values of the K nearest neighbors:</p>
+
+    <div class="math-block">
+<span class="comment">KNN Regression:</span>
+
+<span class="highlight">ŷ = (1/K) · Σ  y⁽ⁱ⁾</span>
+              <span class="comment">x⁽ⁱ⁾ ∈ N_K(x)</span>
+
+<span class="comment">→ Simple average of K neighbors' target values</span>
+
+<span class="comment">Weighted KNN Regression:</span>
+
+<span class="purple">ŷ = ( Σ w⁽ⁱ⁾ · y⁽ⁱ⁾ ) / ( Σ w⁽ⁱ⁾ )</span>
+
+<span class="comment">where w⁽ⁱ⁾ = 1 / d(x, x⁽ⁱ⁾)   (inverse distance weighting)</span>
+    </div>
+
+    <div class="callout">
+      <span class="callout-icon">📈</span>
+      <div class="callout-body">
+        <strong>Example — Predicting House Price:</strong> Query = 3-bed house in neighborhood X. KNN finds 5 nearest houses (by features: beds, area, location). Predicts price = average of those 5 houses' prices. No formula, no coefficients — just local averaging.
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 7: COMPLEXITY -->
+  <section id="complexity">
+    <div class="section-label">Section 07</div>
+    <h2>Time & Space Complexity</h2>
+
+    <div class="math-block">
+<span class="comment">Training Time:</span>   <span class="green">O(1)</span>   <span class="comment">← just store the data</span>
+
+<span class="comment">Prediction Time (brute force):</span>
+  → Compute n distances:    <span class="orange">O(n · d)</span>   <span class="comment">n = samples, d = features</span>
+  → Sort distances:         <span class="orange">O(n · log n)</span>
+  → Total per query:        <span class="orange">O(n · d)</span>
+
+<span class="comment">Space Complexity:</span>         <span class="orange">O(n · d)</span>   <span class="comment">← store all training data</span>
+
+<span class="comment">For m test queries, total prediction cost:</span>  <span class="danger">O(m · n · d)</span>
+    </div>
+
+    <div class="card warn-left">
+      <strong style="color:var(--warn)">The Curse of Dimensionality</strong>
+      <p style="margin-top:0.6rem;color:#94a3b8;font-size:0.88rem;">
+        As dimensions (features) increase, distances between all points converge — everything becomes equally "far" from everything else. With 1000 features, your "nearest" neighbor might be almost as far as your "furthest" neighbor. KNN breaks down in high-dimensional spaces.
+      </p>
+      <div class="math-block" style="margin-top:0.8rem">
+<span class="comment">In high-D space:</span>
+d_max / d_min → 1   <span class="comment">as d → ∞</span>
+
+<span class="comment">→ All points look equally distant</span>
+<span class="comment">→ "Nearest" is no longer meaningful</span>
+<span class="comment">→ Solution: PCA / dimensionality reduction before KNN</span>
+      </div>
+    </div>
+
+    <h3>KD-Trees — Faster Neighbor Search</h3>
+    <p>For low-dimensional data (d &lt; 20), KD-Trees pre-partition the space to speed up search:</p>
+    <div class="math-block">
+<span class="comment">KD-Tree Build Time:</span>   O(n · log n)
+<span class="highlight">KD-Tree Query Time:</span>   O(log n)   <span class="comment">← massive speedup!</span>
+
+<span class="comment">Ball Trees also work well for higher dimensions and non-Euclidean metrics</span>
+<span class="comment">→ sklearn's KNeighborsClassifier uses auto-selection</span>
+    </div>
+  </section>
+
+  <!-- SECTION 8: CODE -->
+  <section>
+    <div class="section-label">Section 08</div>
+    <h2>Implementation from Scratch</h2>
+
+    <div class="code-block">
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">from</span> collections <span class="kw">import</span> Counter
+
+<span class="kw">class</span> <span class="fn">KNNClassifier</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, k=<span class="num">3</span>, metric=<span class="str">'euclidean'</span>):
+        self.k = k
+        self.metric = metric
+
+    <span class="kw">def</span> <span class="fn">fit</span>(self, X, y):
+        <span class="cm"># KNN has no training — just store the data</span>
+        self.X_train = X
+        self.y_train = y
+
+    <span class="kw">def</span> <span class="fn">_distance</span>(self, a, b):
+        <span class="kw">if</span> self.metric == <span class="str">'euclidean'</span>:
+            <span class="kw">return</span> np.sqrt(np.sum((a - b) ** <span class="num">2</span>))
+        <span class="kw">elif</span> self.metric == <span class="str">'manhattan'</span>:
+            <span class="kw">return</span> np.sum(np.abs(a - b))
+
+    <span class="kw">def</span> <span class="fn">_predict_one</span>(self, x):
+        <span class="cm"># Compute distances to all training points</span>
+        distances = [self.<span class="fn">_distance</span>(x, x_train)
+                     <span class="kw">for</span> x_train <span class="kw">in</span> self.X_train]
+
+        <span class="cm"># Sort and get K nearest indices</span>
+        k_indices = np.argsort(distances)[:self.k]
+
+        <span class="cm"># Get labels of K nearest neighbors</span>
+        k_labels = [self.y_train[i] <span class="kw">for</span> i <span class="kw">in</span> k_indices]
+
+        <span class="cm"># Majority vote</span>
+        most_common = Counter(k_labels).most_common(<span class="num">1</span>)
+        <span class="kw">return</span> most_common[<span class="num">0</span>][<span class="num">0</span>]
+
+    <span class="kw">def</span> <span class="fn">predict</span>(self, X):
+        <span class="kw">return</span> [self.<span class="fn">_predict_one</span>(x) <span class="kw">for</span> x <span class="kw">in</span> X]
+
+
+<span class="cm"># ── Usage ──────────────────────────────────────</span>
+<span class="kw">from</span> sklearn.datasets <span class="kw">import</span> load_iris
+<span class="kw">from</span> sklearn.model_selection <span class="kw">import</span> train_test_split
+<span class="kw">from</span> sklearn.preprocessing <span class="kw">import</span> StandardScaler
+
+X, y = load_iris(return_X_y=<span class="kw">True</span>)
+
+<span class="cm"># ⚠️ Always scale features before KNN</span>
+scaler = StandardScaler()
+X_scaled = scaler.<span class="fn">fit_transform</span>(X)
+
+X_train, X_test, y_train, y_test = <span class="fn">train_test_split</span>(
+    X_scaled, y, test_size=<span class="num">0.2</span>, random_state=<span class="num">42</span>
+)
+
+knn = <span class="fn">KNNClassifier</span>(k=<span class="num">5</span>, metric=<span class="str">'euclidean'</span>)
+knn.<span class="fn">fit</span>(X_train, y_train)
+preds = knn.<span class="fn">predict</span>(X_test)
+
+accuracy = np.<span class="fn">mean</span>(np.<span class="fn">array</span>(preds) == y_test)
+<span class="fn">print</span>(<span class="str">f"Accuracy: {accuracy:.2%}"</span>)   <span class="cm"># ~96.67%</span>
+    </div>
+
+    <h3>Using sklearn</h3>
+    <div class="code-block">
+<span class="kw">from</span> sklearn.neighbors <span class="kw">import</span> KNeighborsClassifier
+<span class="kw">from</span> sklearn.model_selection <span class="kw">import</span> cross_val_score
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+
+<span class="cm"># Find best K via cross-validation</span>
+k_range = range(<span class="num">1</span>, <span class="num">31</span>)
+cv_scores = []
+
+<span class="kw">for</span> k <span class="kw">in</span> k_range:
+    knn = <span class="fn">KNeighborsClassifier</span>(
+        n_neighbors=k,
+        metric=<span class="str">'euclidean'</span>,
+        weights=<span class="str">'distance'</span>  <span class="cm"># weighted voting</span>
+    )
+    scores = <span class="fn">cross_val_score</span>(knn, X_train, y_train, cv=<span class="num">5</span>)
+    cv_scores.<span class="fn">append</span>(scores.<span class="fn">mean</span>())
+
+best_k = k_range[np.<span class="fn">argmax</span>(cv_scores)]
+<span class="fn">print</span>(<span class="str">f"Best K: {best_k}"</span>)
+    </div>
+  </section>
+
+  <!-- SECTION 9: TIPS -->
+  <section id="tips">
+    <div class="section-label">Section 09</div>
+    <h2>When to Use KNN</h2>
+
+    <div class="pro-con">
+      <div class="pro-con-box pro">
+        <h4>✅ Advantages</h4>
+        <ul>
+          <li>Simple, intuitive, easy to implement</li>
+          <li>No training time — add new data instantly</li>
+          <li>Non-linear decision boundaries</li>
+          <li>Naturally handles multi-class</li>
+          <li>No assumptions about data distribution</li>
+        </ul>
+      </div>
+      <div class="pro-con-box con">
+        <h4>❌ Disadvantages</h4>
+        <ul>
+          <li>Slow prediction: O(n·d) per query</li>
+          <li>High memory: stores all training data</li>
+          <li>Sensitive to irrelevant features</li>
+          <li>Breaks down in high dimensions</li>
+          <li>Sensitive to scale → must normalize</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Comparison with What You've Learned</h3>
+    <div class="compare-grid">
+      <div class="compare-card">
+        <h4>Linear Regression</h4>
+        <p>Fits one global line/plane. Works when data is truly linear. Extrapolates well. Fast at prediction.</p>
+      </div>
+      <div class="compare-card">
+        <h4>Logistic Regression</h4>
+        <p>Fits one global decision boundary (linear). Works well for linearly separable data. Gives probabilities.</p>
+      </div>
+      <div class="compare-card">
+        <h4>KNN</h4>
+        <p>No global model. Adapts locally. Handles complex shapes. But slow and memory-hungry at scale.</p>
+      </div>
+    </div>
+
+    <div class="card green-left" style="margin-top:2rem">
+      <strong style="color:var(--accent3)">Recommended Use Cases for KNN</strong>
+      <ul style="margin-top:0.6rem; color:#94a3b8; font-size:0.88rem; padding-left:1.2rem;">
+        <li style="margin-bottom:0.4rem">Small-to-medium datasets (&lt; 100K samples)</li>
+        <li style="margin-bottom:0.4rem">Low-dimensional data (&lt; 20 features after preprocessing)</li>
+        <li style="margin-bottom:0.4rem">Recommendation systems (user-user, item-item similarity)</li>
+        <li style="margin-bottom:0.4rem">Anomaly detection (outliers have large distances to all neighbors)</li>
+        <li style="margin-bottom:0.4rem">Image classification on small datasets (pixel-space KNN)</li>
+        <li>Baseline model before trying complex algorithms</li>
+      </ul>
+    </div>
+
+    <h3>Your ML Roadmap — Where KNN Fits</h3>
+    <div class="math-block">
+<span class="green">✓ Linear Regression</span>     → parametric, continuous output, global model
+<span class="green">✓ Logistic Regression</span>    → parametric, classification, global model, gradient descent
+<span class="highlight">→ KNN</span>                    → non-parametric, lazy, local model, no gradient descent
+<span class="muted">  Decision Trees         → non-parametric, tree structure, interpretable</span>
+<span class="muted">  SVM                    → parametric, max-margin, kernel tricks</span>
+<span class="muted">  Neural Networks        → deep, hierarchical representations</span>
+    </div>
+  </section>
+
+</div>
+
+<!-- ── KNN CANVAS LOGIC ── -->
+<script>
+const canvas = document.getElementById('knn-canvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  W = canvas.width = rect.width - 48;
+  H = canvas.height = 400;
+  redraw();
+}
+
+let mode = 'classA';
+let K = 3;
+let points = []; // {x, y, cls: 'A'|'B'|'query'}
+let metric = 'euclidean';
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('mode-label').textContent =
+    m === 'classA' ? 'Class A (Blue)' :
+    m === 'classB' ? 'Class B (Purple)' : 'Query Point';
+}
+
+function updateK(v) {
+  K = parseInt(v);
+  document.getElementById('k-display').textContent = v;
+  classify();
+}
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+
+  if (mode === 'query') {
+    points = points.filter(p => p.cls !== 'query');
+    points.push({x, y, cls: 'query'});
+    classify();
+  } else {
+    points.push({x, y, cls: mode === 'classA' ? 'A' : 'B'});
+    redraw();
+  }
+});
+
+function dist(a, b) {
+  if (metric === 'euclidean') return Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
+  return Math.abs(a.x-b.x) + Math.abs(a.y-b.y);
+}
+
+let lastClassification = null;
+
+function classify() {
+  metric = document.getElementById('dist-select').value;
+  const query = points.find(p => p.cls === 'query');
+  const training = points.filter(p => p.cls !== 'query');
+  const result = document.getElementById('knn-result');
+  const tableWrap = document.getElementById('dist-table-wrap');
+
+  if (!query || training.length < 1) {
+    lastClassification = null;
+    redraw();
+    result.textContent = '';
+    tableWrap.style.display = 'none';
+    return;
+  }
+
+  const withDist = training.map(p => ({...p, d: dist(query, p)}));
+  withDist.sort((a,b) => a.d - b.d);
+  const knn = withDist.slice(0, K);
+
+  const votes = {A: 0, B: 0};
+  knn.forEach(p => votes[p.cls]++);
+  const pred = votes.A > votes.B ? 'A' : votes.B > votes.A ? 'B' : 'TIE';
+
+  lastClassification = { query, knn, pred };
+  redraw();
+
+  result.textContent = pred === 'TIE'
+    ? `⚠️ TIE — increase K to break the tie`
+    : `Prediction: Class ${pred} (${votes[pred]} / ${K} neighbors voted)`;
+  result.style.color = pred === 'A' ? '#38bdf8' : pred === 'B' ? '#a78bfa' : '#fb923c';
+
+  // Table
+  tableWrap.style.display = 'block';
+  const tbody = document.getElementById('dist-tbody');
+  tbody.innerHTML = withDist.slice(0, Math.min(withDist.length, K+3)).map((p, i) => `
+    <tr class="${i < K ? 'winner' : ''}">
+      <td>${i+1}</td>
+      <td style="color:${p.cls==='A'?'#38bdf8':'#a78bfa'}">Class ${p.cls}</td>
+      <td>${p.d.toFixed(2)}</td>
+      <td>${i < K ? '✓' : ''}</td>
+    </tr>
+  `).join('');
+}
+
+function redraw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(31,45,69,0.4)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  const query = lastClassification?.query;
+  const knnSet = new Set(lastClassification?.knn.map((p,i) => i));
+
+  if (query && lastClassification) {
+    const knn = lastClassification.knn;
+    knn.forEach(p => {
+      ctx.beginPath();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'rgba(100,116,139,0.5)';
+      ctx.lineWidth = 1;
+      ctx.moveTo(query.x, query.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // K radius circle
+    if (knn.length > 0) {
+      const kthDist = dist(query, knn[knn.length-1]);
+      ctx.beginPath();
+      ctx.arc(query.x, query.y, kthDist, 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(56,189,248,0.15)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6,3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  points.forEach(p => {
+    ctx.beginPath();
+    if (p.cls === 'query') {
+      ctx.arc(p.x, p.y, 10, 0, Math.PI*2);
+      ctx.fillStyle = lastClassification?.pred === 'A' ? 'rgba(56,189,248,0.3)' :
+                      lastClassification?.pred === 'B' ? 'rgba(167,139,250,0.3)' : 'rgba(251,146,60,0.3)';
+      ctx.fill();
+      ctx.arc(p.x, p.y, 10, 0, Math.PI*2);
+      ctx.strokeStyle = '#fb923c'; ctx.lineWidth = 2.5; ctx.stroke();
+      // cross
+      ctx.beginPath(); ctx.moveTo(p.x-6,p.y); ctx.lineTo(p.x+6,p.y);
+      ctx.moveTo(p.x,p.y-6); ctx.lineTo(p.x,p.y+6);
+      ctx.strokeStyle='#fb923c'; ctx.lineWidth=2; ctx.stroke();
+    } else {
+      ctx.arc(p.x, p.y, 7, 0, Math.PI*2);
+      ctx.fillStyle = p.cls === 'A' ? 'rgba(56,189,248,0.9)' : 'rgba(167,139,250,0.9)';
+      ctx.fill();
+      ctx.strokeStyle = p.cls === 'A' ? '#0ea5e9' : '#7c3aed';
+      ctx.lineWidth = 1.5; ctx.stroke();
+    }
+  });
+}
+
+function clearCanvas() {
+  points = [];
+  lastClassification = null;
+  document.getElementById('knn-result').textContent = '';
+  document.getElementById('dist-table-wrap').style.display = 'none';
+  redraw();
+}
+
+// Progress bar
+window.addEventListener('scroll', () => {
+  const d = document.documentElement;
+  const pct = (d.scrollTop / (d.scrollHeight - d.clientHeight)) * 100;
+  document.getElementById('progress').style.width = pct + '%';
+});
+
+window.addEventListener('resize', resize);
+resize();
+</script>
+
+</body>
+</html>

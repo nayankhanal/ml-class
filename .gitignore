@@ -2,3 +2,25 @@ neural network/cnn/cnn.zip
 neural network/cnn/sign_mnist_train.csv
 nlp/vectorization_download.ipynb
 random_forest/best_car_price_model.pkl
+# Data
+*.csv
+*.zip
+*.tar.gz
+*.parquet
+
+# Models
+*.pkl
+*.h5
+*.pt
+*.onnx
+
+# Environments
+venv/
+.venv/
+__pycache__/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
